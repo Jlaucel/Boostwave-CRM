@@ -24,9 +24,21 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm' # Automatically caches node_modules
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Create build
+        run: npm run build
+
       # copy cloned project to workspace
       - name: copy project to workspace
-        run: cp -r . /home/yunior/boostwave-crm
+        run: cp -r .next/* /home/yunior/boostwave-crm
 
         
         
