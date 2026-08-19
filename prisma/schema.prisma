@@ -1,0 +1,291 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Cliente {
+  id                 String   @id @default(uuid())
+  nombre             String?
+  telefono           String   @unique
+  correo_electronico String?
+  origen             String?
+  estado             String   @default("Nuevo")
+  presupuesto_min    Float?
+  presupuesto_max    Float?
+  etiquetas          String?  // Almacenado como JSON stringificado '["casa", "piscina"]'
+  fecha_creacion     DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  agente_asignado_id String?
+  agente             Agente?  @relation(fields: [agente_asignado_id], references: [id])
+  ventas             Venta[]
+  documentos         DocumentoLegal[]
+
+  empresa_id         String?
+  empresa            Empresa? @relation(fields: [empresa_id], references: [id])
+}
+
+model Propiedad {
+  id                        String   @id @default(uuid())
+  titulo                    String
+  descripcion               String
+  precio                    Float
+  tipo                      String
+  provincia                 String   @default("Distrito Nacional")
+  sector                    String   @default("Centro")
+  tamano_m2                 Float?
+  numero_pisos              Int?
+  numero_cocinas            Int?
+  estado_legal              String?  @default("Al día")
+  caracteristicas_etiquetas String?  // Almacenado como JSON stringificado
+  estado                    String   @default("Disponible")
+  imagenes                  String?  // JSON stringificado de URLs
+  fecha_creacion            DateTime @default(now())
+  fecha_actualizacion       DateTime @updatedAt
+  multiempresa              Boolean  @default(false)
+  comision_multiempresa     Float?
+
+  ventas    Venta[]
+  historial HistorialPropiedad[]
+  documentos DocumentoLegal[]
+
+  agente_asignado_id String?
+  agente             Agente?  @relation(fields: [agente_asignado_id], references: [id])
+
+  empresa_id         String?
+  empresa            Empresa? @relation(fields: [empresa_id], references: [id])
+  asignacionesMultiempresa PropiedadEmpresaAgente[]
+}
+
+model HistorialPropiedad {
+  id               String   @id @default(uuid())
+  campo_modificado String
+  valor_anterior   String?
+  valor_nuevo      String?
+  fecha            DateTime @default(now())
+
+  propiedad_id     String
+  propiedad        Propiedad @relation(fields: [propiedad_id], references: [id], onDelete: Cascade)
+}
+
+model Venta {
+  id             String    @id @default(uuid())
+  estado_venta   String    @default("Contacto Inicial")
+  fecha_interes  DateTime  @default(now())
+  fecha_cierre   DateTime?
+  monto_comision Float?
+  notas          String?
+
+  cliente_id   String
+  cliente      Cliente   @relation(fields: [cliente_id], references: [id])
+  propiedad_id String?
+  propiedad    Propiedad? @relation(fields: [propiedad_id], references: [id])
+  agente_id    String?
+  agente       Agente?   @relation(fields: [agente_id], references: [id])
+  
+  empresa_id   String?
+  empresa      Empresa?  @relation(fields: [empresa_id], references: [id])
+
+  motivo_perdida String?
+  fecha_visita   DateTime?
+  monto_oferta   Float?
+  fecha_actualizacion_estado DateTime @default(now())
+
+  historial_estados HistorialEstadoVenta[]
+  actividades       ActividadVenta[]
+}
+
+model HistorialEstadoVenta {
+  id             String   @id @default(uuid())
+  venta_id       String
+  venta          Venta    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+  estado_anterior String
+  estado_nuevo   String
+  usuario_id     String?
+  razon          String?
+  is_override    Boolean  @default(false)
+  fecha          DateTime @default(now())
+}
+
+model ActividadVenta {
+  id          String   @id @default(uuid())
+  venta_id    String
+  venta       Venta    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+  tipo        String   // Ej: "CAMBIO_AGENTE", "NOTA", "EMAIL"
+  descripcion String
+  usuario_id  String?  // Quién realizó la acción
+  fecha       DateTime @default(now())
+}
+
+model Agente {
+  id                  String @id @default(uuid())
+  nombre              String
+  email               String @unique
+  telefono            String?
+  rol                 String @default("Agente Comercial")
+  estado              String @default("Activo")
+  meta_ventas         Float? @default(1000000)
+  comision_porcentaje Float? @default(3.0)
+
+  clientes    Cliente[]
+  ventas      Venta[]
+  propiedades Propiedad[]
+  actividades ActividadAgente[]
+  documentos  DocumentoLegal[]
+
+  empresa_id               String?
+  empresa                  Empresa? @relation(fields: [empresa_id], references: [id])
+  usuarioEmpresas          UsuarioEmpresa[]
+  asignacionesMultiempresa PropiedadEmpresaAgente[]
+}
+
+model ActividadAgente {
+  id          String   @id @default(uuid())
+  tipo        String   // Ej: "Llamada", "Visita", "Cierre", "Nota"
+  descripcion String
+  fecha       DateTime @default(now())
+
+  agente_id   String
+  agente      Agente   @relation(fields: [agente_id], references: [id], onDelete: Cascade)
+}
+
+model DocumentoLegal {
+  id                String    @id @default(uuid())
+  titulo            String
+  tipo_documento    String    // Ej: "Contrato de Arras", "Promesa de Compraventa", "Contrato de Alquiler", "Cédula", "Título de Propiedad"
+  estado            String    @default("Borrador") // "Borrador", "Pendiente de Firma", "Firmado", "Vencido"
+  contenido         String?   // Texto del contrato generado
+  archivo_url       String?   // URL o ruta del archivo adjunto
+  fecha_creacion    DateTime  @default(now())
+  fecha_vencimiento DateTime?
+
+  cliente_id   String?
+  cliente      Cliente?   @relation(fields: [cliente_id], references: [id], onDelete: SetNull)
+  propiedad_id String?
+  propiedad    Propiedad? @relation(fields: [propiedad_id], references: [id], onDelete: SetNull)
+  agente_id    String?
+  agente       Agente?    @relation(fields: [agente_id], references: [id], onDelete: SetNull)
+  
+  empresa_id   String?
+  empresa      Empresa?   @relation(fields: [empresa_id], references: [id])
+}
+
+model ConfiguracionSistema {
+  id                                String   @id @default("default")
+  nombre_empresa                    String   @default("BoostWave Real Estate")
+  moneda_defecto                    String   @default("USD")
+  telefono_contacto                 String   @default("+1 (809) 555-0100")
+  email_contacto                    String   @default("contacto@boostwave.com")
+
+  // Alertas y SLA
+  dias_estancamiento_pipeline       Int      @default(14)
+  dias_inactividad_cliente          Int      @default(30)
+  alerta_cliente_huerfano_horas     Int      @default(24)
+
+  // Comisiones y Financiero
+  comision_porcentaje_defecto       Float    @default(3.0)
+  meta_ventas_defecto               Float    @default(1000000)
+
+  // Reglas de Negocio
+  auto_asignar_agente               Boolean  @default(true)
+  requerir_confirmacion_cierre      Boolean  @default(true)
+
+  fecha_actualizacion               DateTime @updatedAt
+  
+  empresa_id                        String?  @unique
+  empresa                           Empresa? @relation(fields: [empresa_id], references: [id])
+}
+
+model Usuario {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  password_hash   String
+  nombre          String?
+  is_global_admin Boolean  @default(false)
+  activo          Boolean  @default(true)
+  fecha_creacion  DateTime @default(now())
+
+  empresas        UsuarioEmpresa[]
+  sesiones        Sesion[]
+}
+
+model Empresa {
+  id                String   @id @default(uuid())
+  nombre_comercial  String
+  rnc               String?
+  telefono_contacto String?
+  direccion         String?
+  contrato_url      String?
+  activa            Boolean  @default(true)
+  fecha_creacion    DateTime @default(now())
+  fecha_actualizacion DateTime @updatedAt
+
+  usuarios          UsuarioEmpresa[]
+  clientes          Cliente[]
+  propiedades       Propiedad[]
+  agentes           Agente[]
+  ventas            Venta[]
+  documentos        DocumentoLegal[]
+  configuracion     ConfiguracionSistema?
+  auditorias        AuditLog[]
+  asignacionesMultiempresa PropiedadEmpresaAgente[]
+}
+
+model UsuarioEmpresa {
+  id         String @id @default(uuid())
+  rol        String @default("Agente Normal")
+
+  usuario_id String
+  usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  empresa_id String
+  empresa    Empresa @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+  agente_id  String?
+  agente     Agente? @relation(fields: [agente_id], references: [id])
+
+  @@unique([usuario_id, empresa_id])
+}
+
+model Sesion {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  empresa_id String?
+  rol        String?
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  usuario_id String
+  usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  accion      String
+  descripcion String
+  ip_address  String?
+  fecha       DateTime @default(now())
+
+  usuario_id  String?
+  empresa_id  String?
+  empresa     Empresa? @relation(fields: [empresa_id], references: [id])
+}
+
+model PropiedadEmpresaAgente {
+  id                  String  @id @default(uuid())
+  comision_porcentaje Float?
+
+  propiedad_id String
+  propiedad    Propiedad @relation(fields: [propiedad_id], references: [id], onDelete: Cascade)
+  empresa_id   String
+  empresa      Empresa   @relation(fields: [empresa_id], references: [id], onDelete: Cascade)
+  agente_id    String?
+  agente       Agente?   @relation(fields: [agente_id], references: [id])
+
+  @@unique([propiedad_id, empresa_id])
+}
